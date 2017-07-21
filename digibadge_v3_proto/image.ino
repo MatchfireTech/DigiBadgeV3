@@ -1,93 +1,86 @@
-//Image Mode
-void image(){
-  Serial.println(F("Image Mode Started"));
-  //Draw the image.
-  findBMP(img);
-  while(!menuOn){
-    int i = getButton();
-    int oi = img;
-    if (i != 0){
-      Serial.print(F("Button Pressed: "));
-      Serial.println(i);
-    }
-    if (i == 1) {
-      //Button 1: Previous image
-      img -= 1;
-      if (img < 1){
-        //Go to highest number for images we have
-        img = imgnum;
+//Image slideshow and static image display mode.
+//If we're in Slideshow mode, automatically change every few seconds.
+//Otherwise, just sit on the same image.
+//We don't worry about if we don't have any images, since we shouldn't come here if that is the case.
+
+void imageLoop() {
+  Serial.println(F("Image Mode started"));
+  drawSDJPEG(curimg, 0, 0);
+  delay(250); //Short delay to prevent rapid flitting between menu and mode
+  while (!menuOn) { //Only quit when we go to menu mode
+    i = pwr.getInfo();
+    int img = curimg;
+    if (!bitRead(i, 1) and (bitRead(i, 3) and bitRead(i, 2))){
+      if (curimg > 0) {
+        curimg--;
+      }
+      else {
+        //Loop around.
+        curimg = imgnum;
       }
     }
-    else if (i == 2) {
-      //Button 2: Go to the Menu.
-      menuOn = true;
-    }
-    else if (i == 3) {
-      //Button 3: Next Badge
-      img += 1;
-      if (img > imgnum){
-        //We ran out of images. Cycle back to the beginning.
-        img = 1;
+    else if (!bitRead(i, 3) and ((bitRead(i, 1) and bitRead(i, 2)))){
+      curimg++;
+      if (curimg > imgnum) {
+        //Loop around.
+        curimg = 1;
       }
     }
-    if (img != oi) {
-      //We've changed images. Draw the new one.
-      findBMP(img);
+    else if (!bitRead(i, 2) and ((bitRead(i, 1) and bitRead(i, 3)))){
+      menuOn = true; //Exit to menu.
     }
-    delay(125);
+    delay(15);
+    i = clearButton();
+    if (img != curimg) {
+      drawSDJPEG(curimg, 0, 0);
+    }
+    delay(upspd); //Wait a little before updating. Updating too fast will cause us to speed through things at alarming rates.
   }
 }
 
-void slideshow() {
-  //Slideshow mode
-  Serial.println(F("Entering Slideshow Mode"));
-  //Draw the current image
-  findBMP(img);
-  int t = 0; //We'll use this to change the slides.
-  while(!menuOn){
-    int i = getButton();
-    int oi = img;
-    if (i != 0){
-      Serial.print(F("Button Pressed: "));
-      Serial.println(i);
-    }
-    if (i == 1) {
-      //Button 1: Previous image
-      img -= 1;
-      if (img < 1){
-        //Go to highest number for images we have
-        img = imgnum;
+void slideshowLoop() {
+  Serial.println(F("Slideshow mode started"));
+  drawSDJPEG(curimg, 0, 0);
+  delay(250); //Short delay to prevent rapid flitting between menu and mode
+  int scount = 0;
+  while (!menuOn) { //Only quit when we go to menu mode
+    i = pwr.getInfo();
+    int img = curimg;
+    if (!bitRead(i, 1) and (bitRead(i, 3) and bitRead(i, 2))){
+      if (curimg > 0) {
+        curimg--;
+      }
+      else {
+        //Loop around.
+        curimg = imgnum;
       }
     }
-    else if (i == 2) {
-      //Button 2: Go to the Menu.
-      menuOn = true;
-    }
-    else if (i == 3) {
-      //Button 3: Next Badge
-      img += 1;
-      if (img > imgnum){
-        //We ran out of images. Cycle back to the beginning.
-        img = 1;
+    else if (!bitRead(i, 3) and ((bitRead(i, 1) and bitRead(i, 2)))){
+      curimg++;
+      if (curimg > imgnum) {
+        //Loop around.
+        curimg = 1;
       }
     }
-    if (img != oi) {
-      //We've changed images. Draw the new one.
-      //Reset the timer counter as well.
-      findBMP(img);
-      t = 0; 
+    else if (!bitRead(i, 2) and ((bitRead(i, 1) and bitRead(i, 3)))){
+      menuOn = true; //Exit to menu.
     }
-    delay(125);
-    //Now for slideshow stuff.
-    t += 125;
-    if (t >= slide){ //Time to change!
-      img += 1; //Increase the image.
-      if (img > imgnum){
-        //Ran out of images. Start over.
-        img = 1;
+    delay(15);
+    i = clearButton();
+    if (img != curimg) {
+      drawSDJPEG(curimg, 0, 0);
+    }
+    delay(upspd); //Wait a little before updating. Updating too fast will cause us to speed through things at alarming rates.
+    scount += upspd; //Increment the slideshow counter
+    if (scount >= slide) {
+      //We've waited for the alloted time. Next image!
+      Serial.println(F("Slide updating."));
+      curimg ++;
+      if (curimg > imgnum) {
+        curimg = 1;
       }
-      t = 0; //Reset the timer
-      findBMP(img); //Display the image.
+      drawSDJPEG(curimg, 0, 0);
+      scount = 0;
     }
   }
 }

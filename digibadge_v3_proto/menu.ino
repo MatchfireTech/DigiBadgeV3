@@ -1,67 +1,175 @@
-//Menu "Mode"
+
+#define MENU_BGND TFT_BLACK
+#define MENU_TXT TFT_GREEN
+#define MENU_CUR TFT_YELLOW
+#define MENU_TITLE TFT_RED
+#define MENU_INFO TFT_WHITE
+#define MENU_WARN TFT_RED
+
 void menu() {
-  //Enters main menu
-  Serial.println(F("Starting Main Menu"));
-  tft.fillScreen(ILI9340_BLACK); //Empty the screen.
-  int m = 1; //Number of Menu items
-  int c = 0; //Current Menu. If this is set to -1, we exit the menu system.
-  int sel = 1; //Selection in current menu. Valid entries are 1 to m
-  m = newMenu(0); //Bring up the Main Menu.
+  Serial.println(F("Entering Main Menu"));
+  byte items = 1; //Number of Menu items.
+  int cur = 0; //Current menu. If this is -1, we exit.
+  byte sel = 1; //Current selection. Valid entries are 1 to items
+  tft.fillScreen(MENU_BGND);
+  items = newMenu(0);
   drawCursor(1, sel);
-  while (c >= 0) {
-    int i = getButton();
-    int os = sel; //os = Old Selection. We'll compare this at the end.
-    int oc = c; //oc = Old Menu.
-    if (i != 0){
-      Serial.print(F("Button Pressed: "));
-      Serial.println(i);
-    }
-    if (i == 1){
-      //Button 1: Go up one item.
-      sel -= 1;
-      if (sel < 1){
-        //Wrap around to the bottom.
-        sel = m;
+  delay(500); //Short delay to prevent rapid flitting between menu and mode
+    while (cur >= 0) {
+    i = pwr.getInfo();
+    byte os = sel; //Old selection. We'll compare this at the end.
+    byte oc = cur; //OC = old menu
+    if (!bitRead(i, 1) and (bitRead(i, 3) and bitRead(i, 2))) {
+      //Button 1 pressed. Go "Up" if possible. If not, loop around.
+      if (sel > 1) {
+        sel --;
+      }
+      else {
+        sel = items;
       }
     }
-    else if (i == 3){
-      //Button 2: Go down one item.
-      sel += 1;
-      if (sel > m) {
-        //Wrap around to the top.
+    else if (!bitRead(i, 3) and ((bitRead(i, 1) and bitRead(i, 2)))){
+      //Button 3 pressed.
+      if (sel < items) {
+        sel ++;
+      }
+      else {
         sel = 1;
       }
     }
-    else if (i == 2){
-      //Ooooooh, we've selected something!
-      c = select(c,sel);//Pawn it off on another function.
+    else if (!bitRead(i, 2) and ((bitRead(i, 1) and bitRead(i, 3)))){
+      //Button 2 pressed, something is selected.
+      cur = select(cur,sel); //Pawn it off on another function.
     }
-    if ((sel != os) or (c != oc)) { //Selection or Menu has changed.
-      if (c != oc) {
-        //New Menu. Set selection to 1.
-        sel = 1;
-        tft.fillScreen(ILI9340_BLACK);// Empty the screen
-        m = newMenu(c); //Draw the menu
-      }
-      if (c >= 0){
-        drawCursor(os, sel); //Draw the updated cursor.
-      }
+    delay(15);
+    i = clearButton();
+    if (sel != os) {
+      //Selection has changed
+      drawCursor(os, sel);
     }
-  delay(125);
+    if (cur != oc) {
+      sel = 1;
+      tft.fillScreen(MENU_BGND); //Empty the screen.
+      items = newMenu(cur);
+      drawCursor(1, sel);
+    }
+    delay(menuspd);
   }
+  saveSettings();
 }
 
 void drawCursor(int os, int s) {
   //Draws the cursor on a given line.
-  tft.setTextSize(txtsz);
+  tft.setTextSize(menutxt);
   //First, erase the old cursor.
-  tft.setCursor(0,(8*os*txtsz));
-  tft.setTextColor(ILI9340_BLACK);
+  tft.setCursor(0,(8*os*menutxt));
+  tft.setTextColor(MENU_BGND);
   tft.print(F(">"));
   //Now, draw the new one.
-  tft.setCursor(0,(8*s*txtsz));
-  tft.setTextColor(ILI9340_YELLOW);
+  tft.setCursor(0,(8*s*menutxt));
+  tft.setTextColor(MENU_CUR);
   tft.print(F(">"));  
+}
+
+int newMenu(int c) {
+  //Draws a given menu
+  if (c == 0){
+    //Main Menu
+    drawMenu("DigiBadge V3 Main Menu", "  Badge Mode", "  Image Mode", "  Slideshow Mode", "  Flag Mode", "  Badge Settings",  "  Brightness", "  Slide Timer","  Device Info", "  Power Off", "  Exit Menu");
+    return 10;
+  }
+  else if (c == 1){
+    //Brightness menu
+    drawMenu("Brightness Settings", "  Increase Brightness", "  Decrease Brightness", "  Max Brightness", "  Min Brightness", "  Reset to Default", "  Exit to Main Menu");
+    return 6;
+  }
+  else if (c == 2){
+    //Slideshow Speed Menu
+    drawMenu("Slideshow Speed Settings", "  2.5 Seconds", "  5 Seconds (Default)", "  10 Seconds", "  15 Seconds", "  30 Seconds", "  45 Seconds", "  1 Minute", "  1.5 Minutes", "  2 Minutes", "  2.5 Minutes", "  3 Minutes", "  4 Minutes", "  5 Minutes", "  Exit to Main Menu");
+    return 14;
+  }
+  else if (c == 3){
+    //Device Information
+    drawMenu("Device Information", "  Return to Main Menu");
+    drawSDInfo();
+    return 1;
+  }
+  else if (c == 4){
+    //Badge Style selection
+    drawMenu("Badge Style", "  Default", "  BronyCon", "  ASAN");
+    return 3;
+  }
+}
+
+void drawSDInfo() {
+  //Display various info about the machine.
+  i = pwr.getInfo();
+  tft.setCursor(0, 33);
+  tft.setTextColor(MENU_INFO);
+  tft.println(F("DigiBadge Version 3"));
+  tft.println(F("phoenixborntech.com"));
+  tft.print(F("Battery Voltage: "));
+  int v = pwr.getBatt();
+  Serial.println(v);
+  float volt = v / 1000.00;
+  Serial.println(volt);
+  if (volt < 1.5) {
+    tft.setTextColor(MENU_WARN);
+  }
+  tft.print(volt);
+  tft.setTextColor(MENU_INFO);
+  tft.println(F("v"));
+  if (!bitRead(i,0)) {
+    tft.println(F("SD Card Detected"));
+  }
+  else {
+    tft.println(F("No SD Card Detected"));
+  }
+  if (sd_load) {
+    tft.println(F("SD Card Mounted"));
+    tft.print(imgnum);
+    tft.println(F(" images found"));
+  }
+  else {
+    if (bitRead(i,0)) {
+      tft.println(F("No SD Card to mount"));
+      tft.println("");
+    }
+    else {
+      tft.println(F("SD Card Mounting Failed"));
+      tft.println("");
+    }
+  }
+  tft.println("");
+  tft.println(F("Code v0.4, 7/9/2017"));
+  tft.println(F("For updates, see:"));
+  tft.println(F("phoenixborntech.com/dbv3"));
+}
+
+void drawMenu(char title[], char i1[], char i2[], char i3[],
+              char i4[], char i5[], char i6[], char i7[],
+              char i8[], char i9[], char i10[], char i11[],
+              char i12[], char i13[], char i14[], char i15[]){
+  tft.setTextSize(2);
+  tft.setCursor(0, 0);
+  tft.setTextColor(MENU_TITLE);
+  tft.println(title);
+  tft.setTextColor(MENU_TXT);
+  tft.println(i1);
+  tft.println(i2);
+  tft.println(i3);
+  tft.println(i4);
+  tft.println(i5);
+  tft.println(i6);
+  tft.println(i7);
+  tft.println(i8);
+  tft.println(i9);
+  tft.println(i10);
+  tft.println(i11);
+  tft.println(i12);
+  tft.println(i13);
+  tft.println(i14);
+  tft.println(i15);
 }
 
 int select(int c, int s){
@@ -98,26 +206,34 @@ int select(int c, int s){
       mde = 3;
       return -1;
     }
-    else if (s == 5){
+    else if (s == 5) {
+      //Enter Badge Settings menu
+      Serial.println(F("Entering Badge Menu"));
+      return 4;
+    }
+    else if (s == 6){
       //Brightness Settings
       Serial.println(F("Entering Brightness Menu"));
       return 1;
     }
-    else if (s == 6){
+    else if (s == 7){
       //Slideshow Timer
       Serial.println(F("Entering Slideshow Timer Menu"));
       return 2;
     }
-    else if (s == 7){
+    else if (s == 8){
       //Device Information
       Serial.println(F("Entering Device Information"));
       return 3;
     }
-    else if (s == 8){
+    else if (s == 9){
       //Shut down the system
       Serial.println(F("Shutting down the system."));
-      //shdn();
-      return -1;
+      saveSettings();//Save settings to text file in SPIFFS.
+      pwr.powerOff();
+      //Put a delay in here to make sure we don't get caught in things.
+      delay(2000);
+      return 0;
     }
     else{
       //Exit the menu with no changes
@@ -131,42 +247,42 @@ int select(int c, int s){
     if (s == 1){
       //Brightness Up
       Serial.println(F("Increase Brightness"));
-      bright += 15;
-      if (bright > 1023){
-        bright = 1023;
+      bklt += 5;
+      if (bklt < 10) {
+        bklt = 255; //We accidentally rolled around. Fix it.
       }
-      setBright();
+      pwr.setBacklight(bklt);
       return 1;//Return to the same menu
     }
     else if (s == 2){
       //Brightness down
       Serial.println(F("Decrease Brightness"));
-      bright -= 15;
-      if (bright < 128){
-        bright = 128;
+      bklt -= 5;
+      if (bklt < 10){
+        bklt = 10;
       }
-      setBright();
+      pwr.setBacklight(bklt);
       return 1; //Return to the same menu
     }
     else if (s == 3){
       //Max Brightness
       Serial.println(F("Maximum Brightness"));
-      bright = 1023;
-      setBright();
+      bklt = 255;
+      pwr.setBacklight(bklt);
       return 1; //Return to same menu
     }
     else if (s == 4) {
       //Min Brightness
       Serial.println(F("Minimum Brightness"));
-      bright = 128;
-      setBright();
+      bklt = 10;
+      pwr.setBacklight(bklt);
       return 1;
     }
     else if (s == 5){
       //Default brightness
       Serial.println(F("Default Brightness"));
-      bright = 700;
-      setBright();
+      bklt = 175;
+      pwr.setBacklight(bklt);
       return 1; //Return to same menu
     }
     else if (s == 6){
@@ -264,96 +380,21 @@ int select(int c, int s){
     Serial.println(F("Returning to Main Menu"));
     return 0;
   }
-}
-
-int newMenu(int c) {
-  //Draws a given menu
-  if (c == 0){
-    //Main Menu
-    drawMenu("DigiBadge V3 Main Menu", "  Badge Mode", "  Image Mode", "  Slideshow Mode", "  Flag Mode", "  Brightness", "  Slide Timer", "  Device Info", "  Power Off", "  Exit Menu");
-    return 9;
-  }
-  else if (c == 1){
-    //Brightness menu
-    drawMenu("Brightness Settings", "  Increase Brightness", "  Decrease Brightness", "  Max Brightness", "  Min Brightness", "  Reset to Default", "  Exit to Main Menu");
-    return 6;
-  }
-  else if (c == 2){
-    //Slideshow Speed Menu
-    drawMenu("Slideshow Speed Settings", "  2.5 Seconds", "  5 Seconds (Default)", "  10 Seconds", "  15 Seconds", "  30 Seconds", "  45 Seconds", "  1 Minute", "  1.5 Minutes", "  2 Minutes", "  2.5 Minutes", "  3 Minutes", "  4 Minutes", "  5 Minutes", "  Exit to Main Menu");
-    return 14;
-  }
-  else if (c == 3){
-    //Device Information
-    drawMenu("Device Information", "  Return to Main Menu");
-    drawSDInfo();
-    return 1;
-  }
-}
-
-void drawSDInfo() {
-  //Display various info about the machine.
-  tft.setCursor(0, 33);
-  tft.setTextColor(ILI9340_WHITE);
-  tft.println(F("DigiBadge Version 3"));
-  tft.println(F("http://www.matchfire.net"));
-  tft.print(F("Battery Voltage: "));
-  if (getVoltage() < 2.0) {
-    tft.setTextColor(ILI9340_RED);
-  }
-  tft.print(getVoltage());
-  tft.setTextColor(ILI9340_WHITE);
-  tft.println(F("v"));
-  if (checkSD()) {
-    tft.println(F("SD Card Detected"));
-  }
-  else {
-    tft.println(F("No SD Card Detected"));
-  }
-  if (sd_load) {
-    tft.println(F("SD Card Mounted"));
-    tft.print(imgnum);
-    tft.println(F(" images found"));
-  }
-  else {
-    if (!checkSD()) {
-      tft.println(F("No SD Card to mount"));
-      tft.println("");
+  else if (c == 4){
+    if (s == 1) {
+      Serial.println(F("Default Badge Style"));
+      bstyle = 0;
+      return 0;
     }
-    else {
-      tft.println(F("SD Card Mounting Failed"));
-      tft.println("");
+    else if (s == 2) {
+      Serial.println(F("BronyCon Badge Style"));
+      bstyle = 1;
+      return 0;
+    }
+    else if (s == 3) {
+      Serial.println(F("ASAN Badge Style"));
+      bstyle = 2;
+      return 0;
     }
   }
-  tft.println("");
-  tft.println(F("Code v0.1, 3/19/2017"));
-  tft.println(F("For updates, see:"));
-  tft.println(F("matchfire.net/dbv3"));
 }
-
-void drawMenu(char title[], char i1[], char i2[], char i3[],
-              char i4[], char i5[], char i6[], char i7[],
-              char i8[], char i9[], char i10[], char i11[],
-              char i12[], char i13[], char i14[], char i15[]){
-  tft.setTextSize(2);
-  tft.setCursor(0, 0);
-  tft.setTextColor(ILI9340_RED);
-  tft.println(title);
-  tft.setTextColor(ILI9340_GREEN);
-  tft.println(i1);
-  tft.println(i2);
-  tft.println(i3);
-  tft.println(i4);
-  tft.println(i5);
-  tft.println(i6);
-  tft.println(i7);
-  tft.println(i8);
-  tft.println(i9);
-  tft.println(i10);
-  tft.println(i11);
-  tft.println(i12);
-  tft.println(i13);
-  tft.println(i14);
-  tft.println(i15);
-}
-
